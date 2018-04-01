@@ -9,6 +9,12 @@
 import UIKit
 import CoreLocation
 
+private let dateFormatter: DateFormatter = {
+    let dateFormatter = DateFormatter()
+    dateFormatter.dateFormat = "EEEE, MMM dd, y"
+    return dateFormatter
+}()
+
 class DetailVC: UIViewController {
     
     @IBOutlet weak var dateLabel: UILabel!
@@ -16,6 +22,8 @@ class DetailVC: UIViewController {
     @IBOutlet weak var temperatureLabel: UILabel!
     @IBOutlet weak var summaryLabel: UILabel!
     @IBOutlet weak var currentImage: UIImageView!
+    @IBOutlet weak var tableView: UITableView!
+    @IBOutlet weak var collectionView: UICollectionView!
     
     var currentPage = 0
     var locationsArray = [WeatherLocation]()
@@ -24,6 +32,10 @@ class DetailVC: UIViewController {
     
     override func viewDidLoad() {
         super.viewDidLoad()
+        tableView.delegate = self
+        tableView.dataSource = self
+        collectionView.delegate = self
+        collectionView.dataSource = self
         if currentPage != 0 {
             self.locationsArray[currentPage].getWeather {
                 self.updateUserInterface()
@@ -39,11 +51,16 @@ class DetailVC: UIViewController {
     }
 
     func updateUserInterface() {
-        locationLabel.text = locationsArray[currentPage].name
-        dateLabel.text = locationsArray[currentPage].coordinates
-        temperatureLabel.text = locationsArray[currentPage].currentTemp
-        print("%%%% currentTemp inside updateUserInterface = \(locationsArray[currentPage].currentTemp)")
+        let location = locationsArray[currentPage]
+        locationLabel.text = location.name
+        let dateString = location.currentTime.format(timeZone: location.timeZone, dateFormatter: dateFormatter)
+        dateLabel.text = dateString
+        temperatureLabel.text = location.currentTemp
+        summaryLabel.text = location.currentSummary
+        currentImage.image = UIImage(named: location.currentIcon)
+        tableView.reloadData()
     }
+    
 }
 
 extension DetailVC: CLLocationManagerDelegate {
@@ -77,8 +94,6 @@ extension DetailVC: CLLocationManagerDelegate {
         let currentLatitude = currentLocation.coordinate.latitude
         let currentLongitude = currentLocation.coordinate.longitude
         let currentCoordinates = "\(currentLatitude),\(currentLongitude)"
-        print(currentCoordinates)
-        dateLabel.text = currentCoordinates
         geoCoder.reverseGeocodeLocation(currentLocation, completionHandler:
             {placemarks, error in
             if placemarks != nil {
@@ -98,5 +113,36 @@ extension DetailVC: CLLocationManagerDelegate {
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         print("failed to get user location")
+    }
+}
+
+extension DetailVC: UITableViewDataSource, UITableViewDelegate {
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        return locationsArray[currentPage].dailyForecastArray.count
+    }
+    
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: "DayWeatherCell", for: indexPath) as! DayWeatherCell
+        let dailyForecast = locationsArray[currentPage].dailyForecastArray[indexPath.row]
+        let timeZone = locationsArray[currentPage].timeZone
+        cell.update(with: dailyForecast, timeZone: timeZone)
+        return cell
+    }
+    
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        return 80
+    }
+    
+}
+
+extension DetailVC: UICollectionViewDataSource, UICollectionViewDelegate {
+    
+    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+        return 24 //hourly weather
+    }
+    
+    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+        let hourlyCell = collectionView.dequeueReusableCell(withReuseIdentifier: "HourlyCell", for: indexPath)
+        return hourlyCell
     }
 }
